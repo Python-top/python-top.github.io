@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Интерактивная модель Вольтерры-Лотки </title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background: linear-gradient(to bottom, #cce7c0, #87c68d);
+}
+.input-container, .slider-container, .time-container { margin: 10px 0; }
+label { margin-right: 10px; font-weight: bold; }
+canvas { 
+    margin-top: 20px; 
+    background-color: rgba(255,255,255,0.8);
+    border: 1px solid #aaa;
+    border-radius: 8px;
+}
+h2 { text-align: center; color: #2e4d20; }
+button { margin-right: 10px; padding:5px 10px; }
+</style>
+</head>
+<body>
+
+<h2>Интерактивная модель Вольтерры–Лотки.</h2>
+<h3>Выполнил - Косов Игорь Игоревич.</h3>
+<h4>Руководитель - Краснова Вера Владимировна</h4>
+
+<div class="input-container">
+<label>Начальная численность зайцев: </label>
+<input type="number" id="x0" value="14000">
+<label>Начальная численность волков: </label>
+<input type="number" id="y0" value="130">
+</div>
+
+<div class="slider-container">
+<label>a (рост зайцев): <span id="a_val">0.25</span></label>
+<input type="range" min="0" max="1" step="0.01" value="0.25" id="a">
+</div>
+<div class="slider-container">
+<label>b (поедание зайцев): <span id="b_val">0.00261</span></label>
+<input type="range" min="0" max="0.01" step="0.0001" value="0.00261" id="b">
+</div>
+<div class="slider-container">
+<label>c (смертность волков): <span id="c_val">0.5</span></label>
+<input type="range" min="0" max="1" step="0.01" value="0.5" id="c">
+</div>
+<div class="slider-container">
+<label>d (прирост волков от пищи): <span id="d_val">0.00001</span></label>
+<input type="range" min="0" max="0.001" step="0.00001" value="0.00001" id="d">
+</div>
+
+<div class="time-container">
+<label>Шаг времени: </label>
+<button data-step="1/12">Месяц</button>
+<button data-step="1/52">Неделя</button>
+<button data-step="1/365">День</button>
+</div>
+
+<canvas id="popChart" width="800" height="400"></canvas>
+<canvas id="phaseChart" width="400" height="400"></canvas>
+
+<script>
+let steps = 500;
+let dt = 1/52; // по умолчанию неделя
+let t = Array.from({length: steps}, (_, i) => i*dt);
+
+function simulate(a,b,c,d,x0,y0){
+    let x=[x0], y=[y0];
+    for(let i=1;i<steps;i++){
+        let dx = (a*x[i-1]-b*x[i-1]*y[i-1])*dt;
+        let dy = (d*x[i-1]*y[i-1]-c*y[i-1])*dt;
+        x.push(x[i-1]+dx);
+        y.push(y[i-1]+dy);
+    }
+    return {x,y};
+}
+
+const ctxPop = document.getElementById('popChart').getContext('2d');
+const popChart = new Chart(ctxPop,{
+    type:'line',
+    data:{
+        labels:t,
+        datasets:[
+            {label:'Зайцы', data:[], borderColor:'green', backgroundColor:'rgba(0,255,0,0.3)', fill:true},
+            {label:'Волки', data:[], borderColor:'red', backgroundColor:'rgba(255,0,0,0.3)', fill:true}
+        ]
+    },
+    options:{
+        responsive:true,
+        plugins:{tooltip:{callbacks:{label: context=>`${context.dataset.label}: ${context.raw.toFixed(1)}`}}},
+        scales:{
+            x:{title:{display:true,text:'Время'}},
+            y:{title:{display:true,text:'Численность'}}
+        }
+    }
+});
+
+const ctxPhase = document.getElementById('phaseChart').getContext('2d');
+const phaseChart = new Chart(ctxPhase,{
+    type:'scatter',
+    data:{datasets:[{label:'Фазовый портрет', data:[], borderColor:'blue', showLine:true, fill:false}]},
+    options:{
+        responsive:true,
+        plugins:{tooltip:{callbacks:{label: context=>`Зайцы: ${context.raw.x.toFixed(1)}, Волки: ${context.raw.y.toFixed(1)}`}}},
+        scales:{
+            x:{title:{display:true,text:'Зайцы'}},
+            y:{title:{display:true,text:'Волки'}}
+        }
+    }
+});
+
+function updateCharts(){
+    const a=parseFloat(document.getElementById('a').value);
+    const b=parseFloat(document.getElementById('b').value);
+    const c=parseFloat(document.getElementById('c').value);
+    const d=parseFloat(document.getElementById('d').value);
+    const x0=parseFloat(document.getElementById('x0').value);
+    const y0=parseFloat(document.getElementById('y0').value);
+
+    document.getElementById('a_val').textContent = a.toFixed(1);
+    document.getElementById('b_val').textContent = b.toFixed(4);
+    document.getElementById('c_val').textContent = c.toFixed(1);
+    document.getElementById('d_val').textContent = d.toFixed(6);
+
+    const {x,y} = simulate(a,b,c,d,x0,y0);
+
+    popChart.data.labels = t.map(v => +(v.toFixed(1)));
+    popChart.data.datasets[0].data = x.map(v => +v.toFixed(1));
+    popChart.data.datasets[1].data = y.map(v => +v.toFixed(1));
+    popChart.update();
+
+    const phaseData = x.map((xi,i)=>({x:+xi.toFixed(1),y:+y[i].toFixed(1)}));
+    phaseChart.data.datasets[0].data = phaseData;
+    phaseChart.update();
+}
+
+// слушатели ползунков и начальных значений
+['a','b','c','d','x0','y0'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', updateCharts);
+});
+
+// слушатели кнопок времени (только Месяц, Неделя, День)
+document.querySelectorAll('.time-container button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+        let val = eval(btn.dataset.step);
+        dt = val;
+        t = Array.from({length: steps}, (_, i) => i*dt);
+        updateCharts();
+    });
+});
+
+// первый рендер
+updateCharts();
+</script>
+
+</body>
+</html>
